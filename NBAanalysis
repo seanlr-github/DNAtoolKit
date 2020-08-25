@@ -1,0 +1,236 @@
+"""NBA Stats/Contract Analysis"""
+
+#Import Data
+NBA = "NBAset.xlsx"
+import pandas as pd
+import numpy as np
+pd.set_option('display.max_columns', 75)
+
+#Cleaning data: Removing Empty Data and Renaming Columns to more Common Terms
+data = pd.read_excel(NBA)
+report = data.copy()
+report = report.drop("blank1", axis = 1)
+report = report.drop("#", axis = 1)
+report = report.drop("blank2", axis = 1)
+
+empty=['TS%','3PAr','FTr','TOV%','FG%','3P%','2P%','eFG%','FT%']
+for i in empty:
+    report[i].fillna(0, inplace=True)
+    
+report.rename(columns = {"Tm": "Team"}, inplace = True)
+report.rename(columns = {"G": "GP"}, inplace = True)
+report.rename(columns = {"Player Name": "Name"}, inplace = True)
+report.rename(columns = {"Season Start": "Season"}, inplace = True)
+report.rename(columns = {"Player Salary in $": "Salary"}, inplace = True)
+report=report.dropna(subset = ["Salary"])
+report=report[:-1]
+report["Name"] = report["Name"].map(lambda x: x.rstrip('x')) 
+report["Salary"] = report.Salary.astype(float)
+report=report[~report["Team"].str.contains("TOT", na=False)]
+report=report[report["GP"]>20]
+report=report[~report["Team"].str.contains("TOT", na=False)]
+
+
+mapping = {'PG': 1, 'SG': 2, 'SF': 3, 'PF': 4, 'C':5}
+report['Pos'] = report['Pos'].map(mapping)
+
+#Adjusting for the changes of cities of franchies (i.e. there is only 30 teams in the NBA from 1995 to 2017)
+report["Team"].replace("WSB", "WAS", inplace=True)
+report["Team"].replace("SEA", "OKC", inplace=True)
+report["Team"].replace("NOK", "NOP", inplace=True)
+report["Team"].replace("NJN", "BRK", inplace=True)
+report["Team"].replace("CHH", "NOP", inplace=True)
+report["Team"].replace("NOH", "NOP", inplace=True)
+report["Team"].replace("VAN", "MEM", inplace=True)
+report["Team"].replace("CHA", "CHO", inplace=True)
+len(report["Team"].unique())
+
+#Normalizing NBA Stats
+report["GS/GP"] = report["GS"]/report["GP"]
+
+report["SPG"] = report["STL"]/report["GP"]
+report["FTPG"] = report["FT"]/report["GP"]
+report["FTAPG"] = report["FTA"]/report["GP"]
+report["BPG"] = report["BLK"]/report["GP"]
+report["RPG"] = report["TRB"]/report["GP"]
+report["FGPG"] = report["FG"]/report["GP"]
+report["FGAPG"] = report["FGA"]/report["GP"]
+report["3PPG"] = report["3P"]/report["GP"]
+report["3PAPG"] = report["3PA"]/report["GP"]
+report["APG"] = report["AST"]/report["GP"]
+report["2PPG"] = report["2P"]/report["GP"]
+report["2PAPG"] = report["2PA"]/report["GP"]
+report["TPG"] = report["TOV"]/report["GP"]
+report["PFPG"] = report["PF"]/report["GP"]
+report["MPG"] = report["MP"]/report["GP"]
+report["ORPG"] = report["ORB"]/report["GP"]
+report["DRPG"] = report["DRB"]/report["GP"]
+report["PPG"] = report["PTS"]/report["GP"]
+report["SPG"] = report["STL"]/report["GP"]
+
+
+drop_columns = ['3P', '3PA', '2P', '2PA','BLK', 'TOV', 'FT', 'FTA', 'ORB', 'DRB', 'TRB', 'PF', 'PTS', 'MP', 'AST', 'STL', 'FG', 'FGA']
+report.drop(drop_columns, axis = 1, inplace = True)
+
+#Dividing Information Into 2 Categories to Explore which Stats have a Better Correlation
+advanced=['% of Cap','PER', 'TS%', '3PAr', 'FTr', 'ORB%', 'DRB%', 'TRB%', 'AST%', 'STL%', 'BLK%', 'TOV%', 'USG%', 'OWS', 'DWS', 'WS', 'WS/48', 'OBPM', 'DBPM', 'BPM', 'VORP']
+basic=['FGPG', 'PPG','2PPG','2PAPG','FGAPG','FTAPG','FTPG','DRPG']
+
+
+#Graphing NBA Cap over 1995 - 2017
+from pandas import *
+
+my_dic = pd.read_excel('salaryCap (1).xlsx', index_col=0).to_dict()
+cap=my_dic['Salary Cap']
+
+sal = report.groupby("Season")["Salary"].mean()
+var = sal.plot.bar(x="Season", y="Salary")
+var.set_ylabel("Average NBA Salary")
+var.set_title("NBA CAP from 1995 to 2017")
+var.plot()
+
+report["Cap"] = report["Season"].map(cap)
+report["% of Cap"]=(report["Salary"]/report["Cap"])*100
+report=report.dropna(subset = ["% of Cap"])
+
+salary = report["Salary"]
+report = report.drop("Salary", axis=1)
+
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots(figsize=(12,10))
+corr = report.corr()
+sns.heatmap(corr, 
+            xticklabels=corr.columns.values,
+            yticklabels=corr.columns.values, ax=ax)
+            
+#Creating Pairplot for Basic Stats to identify Multicollinearity
+
+basic_stats=report[basic]
+
+def heatMap(df, k):
+    corrmat = df.corr(method='pearson', min_periods=1)
+    r_square = corrmat ** 2
+  
+    cols = r_square.nlargest(k, "% of Cap")["% of Cap"].index
+    cm = df[cols].corr()
+    cm_square = cm ** 2
+    f, ax = plt.subplots(figsize=(7, 7))
+    sns.set(font_scale=1.25)
+    hm = sns.heatmap(cm_square, cbar=False, annot=True, square=True, fmt='.2f', annot_kws={'size': 10}, yticklabels=cols.values, xticklabels=cols.values)
+    plt.show()
+
+sns.set()
+sns.pairplot(basic_stats, height=2.5)
+plt.show()
+
+basic_stats=report[basic]
+NBA_advanced_stats=report[advanced]
+
+d = NBA_advanced_stats[['WS', 'VORP','PER','OWS', 'DWS','BPM','OBPM','USG%']]
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+vif = pd.DataFrame()
+vif["VIF Factor"] = [variance_inflation_factor(d.values, i) for i in range(z.shape[1])]
+vif["features"] = d.columns
+vif.round(1)
+
+advanced_squared = NBA_advanced_stats[['WS', 'VORP','PER','BPM','OBPM','USG%']]
+vif = pd.DataFrame()
+vif["VIF Factor"] = [variance_inflation_factor(advanced_squared.values, i) for i in range(advanced_squared.shape[1])]
+vif["features"] = advanced_squared.columns
+vif.round(1)
+
+adv=['% of Cap', 'WS', 'VORP','PER','OWS','DWS','BPM','OBPM','USG%',]
+sns.set()
+sns.pairplot(advanced_stats[adv], height=2.5)
+plt.show()
+
+#Producing Residual Plots for Basic and Advanced stats
+
+from sklearn.metrics import mean_squared_error
+import numpy as np
+from sklearn import metrics
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score, cross_val_predict
+
+from sklearn.linear_model import LinearRegression
+
+y=report[['% of Cap']]
+
+linreg = LinearRegression()
+
+x_train, x_test, y_train, y_test=train_test_split(advanced_squared, y, test_size=0.2, random_state=123)
+linreg.fit(x_train, y_train)
+predictions=linreg.predict(x_test)
+
+predict = cross_val_predict(linreg, advanced_squared, y, cv=6)
+
+rmse = np.sqrt(mean_squared_error(predict, y))
+score = metrics.r2_score(y, predict)
+print ('Root Mean Squared Error is :', rmse)
+print ('R sq is :', score)
+
+residuals = y - predict
+plt.scatter(predict, residuals)
+plt.xlabel('Predictions for % of Cap')
+plt.ylabel('Residual Values')
+plt.title('Linear Regression Model for Correlation between Advanced Stats and % of Cap')
+plt.show()
+
+basic_squared=basic_stats[['FGPG', 'PPG','2PPG','2PAPG','FGAPG','FTAPG','FTPG','DRPG']]
+
+x_train, x_test, y_train, y_test=train_test_split(basic_squared, y, test_size=0.2, random_state=123)
+linreg.fit(x_train, y_train)
+predictions=linreg.predict(x_test)
+
+predict = cross_val_predict(linreg, basic_squared, y, cv=6)
+
+rmse = np.sqrt(mean_squared_error(predict, y))
+score = metrics.r2_score(y, predict)
+print ('Root Mean Squared Error is :', rmse)
+print ('R sq is :', score)
+
+residuals = y - predict
+plt.scatter(predict, residuals)
+plt.xlabel('Predictions for % of Cap')
+plt.ylabel('Residual Values')
+plt.title('Linear Regression Model for Correlation between Basic Stats and % of Cap')
+plt.show()
+
+#Looking at the Top 50 valued NBA players by Residuals
+
+report['Predicted % of Cap']=predict
+report['Residuals']=residuals
+report['Resid %']=(report['Residuals']/report['% of Cap']*100)
+
+copy = report
+copy = copy[['Season', 'SPG', 'BPG','DRPG', '3PPG', 'APG','2PPG', 'MPG','Name', 'Age', 'Team', 'PER', '% of Cap', 'Predicted % of Cap', 'Residuals']]
+copy = copy.sort_values('Residuals')
+top50 = copy[:50]
+top50
+
+#Looking at Some of the Common Stats Associated with Top 50
+ageMean = top50['Age'].mean()
+print ('The average age is:',ageMean)
+
+perMean = top50['PER'].mean()
+print ('The average PER is:',perMean)
+
+drbmean = top50['DRPG'].mean()
+print ('The average Defensive rebounds is:',drbmean)
+
+SPGmean = top50['SPG'].mean()
+print ('The average Steals per game is:',SPGmean)
+
+twomean = top50['2PPG'].mean()
+print ('The average 2 point field goals is:',twomean)
+
+APGmean = top50['APG'].mean()
+print ('The average Assist per game is:',APGmean)
+
+BLKmean = top50['BPG'].mean()
+print ('The average Block per game is:',BLKmean)
+
+capMean = top50['% of Cap'].mean()
+print ('The average % of Cap is:',capMean)
