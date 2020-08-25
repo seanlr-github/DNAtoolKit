@@ -1,0 +1,57 @@
+class two_seq_alignment(object):
+    def __init__(self, ss, fs):
+        self.ss = ss
+        self.fs = fs
+        self.changes = []
+
+    d_l = lambda self, ss, fs, c, d: 1 if ss[c] != fs[d] else 0
+
+    def find_solution(self, Matrix, b, a):
+        if b == 0 and a == 0:
+            return
+        
+
+        align = (Matrix[b - 1][a - 1] + self.d_l(self.ss, self.fs, b - 1, a - 1) if b != 0 and a != 0 else float("inf"))
+        inst = Matrix[b][a - 1] + 1 if a != 0 else float("inf")
+        dlt = Matrix[b - 1][a] + 1 if b != 0 else float("inf")
+
+        best_choice = min(inst, align, dlt)
+
+        if best_choice == inst:
+            self.changes.append("inst_" + str(self.fs[a - 1]))
+            return self.find_solution(Matrix, b, a - 1)
+
+        elif best_choice == align:
+            self.changes.append("align_" + str(self.fs[a - 1]))
+            return self.find_solution(Matrix, b - 1, a - 1)
+
+        elif best_choice == dlt:
+            self.changes.append("delete_" + str(self.ss[b - 1]))
+            return self.find_solution(Matrix, b - 1, a)
+
+    def alignment(self):
+        a = len(self.fs)
+        b = len(self.ss)
+        Matrix = [[0 for c in range(a + 1)] for d in range(b+ 1)]
+        
+        for c in range(1, b + 1):
+            for d in range(1, a + 1):
+                Matrix[c][d] = min(Matrix[c - 1][d - 1] + self.d_l(self.ss, self.fs, c - 1, d - 1), Matrix[c - 1][d] + 1, Matrix[c][d - 1] + 1)  
+                
+        for d in range(1, a + 1):
+            Matrix[0][d] = d
+        
+        for c in range(1, b + 1):
+            Matrix[c][0] = c
+
+        self.find_solution(Matrix, b, a)
+
+        return (Matrix[b][a], self.changes[::-1])
+        
+ if __name__ == '__main__':
+    ss = 'ATAAAGCTTTAAAG'
+    fs = 'TCGACGTCATAGCGC'
+    sqalign = two_seq_alignment(ss, fs)
+    min_edit, steps = sqalign.alignment()
+    print('The amount of edits conduct is: ' + str(min_edit))
+    print('The edits made are: ' + str(steps))
